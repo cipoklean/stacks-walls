@@ -1,24 +1,39 @@
-# Rust
-target/
-
-# Node
+# Dependencies
 node_modules/
+contracts/node_modules/
+frontend/node_modules/
 
-# Environment — never commit real keys
+# Build output
+frontend/.next/
+frontend/out/
+frontend/.cache/
+contracts/.cache/
+
+# Environment files
 .env
 .env.local
 .env.*.local
 
-# Clarinet devnet / generated settings (keep Devnet.toml, Testnet.toml, Mainnet.toml tracked)
-contracts/.cache/
-contracts/.devnet/
-contracts/settings/Simnet.toml
-contracts/settings/Epoch*.toml
+# TypeScript cache
+*.tsbuildinfo
 
-# Next.js build
-frontend/.next/
-frontend/out/
+# Test coverage
+coverage/
 
-# OS
+# OS files
 .DS_Store
-*.pem
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+dist/
+build/

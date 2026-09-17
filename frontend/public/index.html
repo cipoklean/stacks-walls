@@ -835,13 +835,41 @@
       grid.innerHTML = '<div class="state-placeholder"><div class="spinner"></div><p>Loading posts...</p></div>';
       
       try {
-        // Fetch post count
-        const countUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + CONTRACT_ADDRESS + '/get-post-count';
-        const countResp = await fetch(countUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '[]' });
-        const countJson = await countResp.json();
-        const count = parseInt(countJson.result, 16);
+        // Use stx_callContract via wallet (if connected) or direct fetch
+        const contractAddr = CONTRACT_ADDRESS.split('.')[0];
+        const contractName = CONTRACT_ADDRESS.split('.')[1];
+        const callUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + 
+          encodeURIComponent(contractAddr) + '/' + 
+          encodeURIComponent(contractName) + '/get-post-count';
         
-        if (count === 0) {
+        console.log('Calling:', callUrl);
+        
+        const countResp = await fetch(callUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '[]'
+        });
+        
+        if (!countResp.ok) {
+          console.error('Count response not ok:', countResp.status, await countResp.text());
+          throw new Error('API returned ' + countResp.status);
+        }
+        
+        const countJson = await countResp.json();
+        console.log('Count response:', countJson);
+        
+        let count = 0;
+        if (countJson.result !== undefined) {
+          count = parseInt(countJson.result, 16);
+        } else if (countJson.data !== undefined && countJson.data.result !== undefined) {
+          count = parseInt(countJson.data.result, 16);
+        } else if (typeof countJson === 'number') {
+          count = countJson;
+        }
+        
+        console.log('Post count:', count);
+        
+        if (count === 0 || isNaN(count)) {
           grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
           return;
         }
@@ -850,35 +878,53 @@
         const limit = Math.min(count, 20);
         const start = count - limit;
         
-        // Build args for get-posts(start, len) - Clarity tuple/list
-        const args = JSON.stringify([
+        const postsUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + 
+          encodeURIComponent(contractAddr) + '/' + 
+          encodeURIComponent(contractName) + '/get-posts';
+        
+        const postsArgs = [
           { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
           { type: 'list', value: [String(limit) + 'u'] }
-        ]);
+        ];
         
-        const postsUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + CONTRACT_ADDRESS + '/get-posts';
-        const postsResp = await fetch(postsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) });
+        const postsResp = await fetch(postsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ args: postsArgs })
+        });
+        
+        if (!postsResp.ok) {
+          console.error('Posts response not ok:', postsResp.status, await postsResp.text());
+          throw new Error('Posts API returned ' + postsResp.status);
+        }
+        
         const postsJson = await postsResp.json();
+        console.log('Posts response:', JSON.stringify(postsJson).slice(0, 500));
         
-        // Parse posts from Clarity list
         posts = [];
         if (postsJson.result && postsJson.result.list) {
           posts = postsJson.result.list.map(item => {
             const t = item.tuple || item;
             return {
-              author: t.author,
-              content: t.content,
-              timestamp: parseInt(t.timestamp, 10)
+              author: t.author || 'unknown',
+              content: t.content || '',
+              timestamp: parseInt(t.timestamp, 10) * 1000 || Date.now()
             };
           });
+        } else if (postsJson.result && Array.isArray(postsJson.result)) {
+          posts = postsJson.result.map(item => ({
+            author: item.author,
+            content: item.content,
+            timestamp: parseInt(item.timestamp, 10) * 1000 || Date.now()
+          }));
         }
         
-        // Render
+        console.log('Parsed posts:', posts.length);
         renderPosts();
         
       } catch (err) {
         console.error('Load failed:', err);
-        grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p></div>';
+        grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p><p>' + err.message + '</p></div>';
       }
     }
     

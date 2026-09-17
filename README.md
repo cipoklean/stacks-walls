@@ -1,15 +1,23 @@
-## stacks-walls
+# stacks-walls
 
 On-chain guestbook dApp for Zero Authority DAO bounty.
 
-### Contract
+## Contract
 - **Name:** guestbook
 - **Address:** ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4.guestbook
 - **Network:** Testnet
-- **Functions:** post-message, get-posts, get-post-count, get-post-by-author
+- **TXID:** 1271f7a3...275be
+- **Functions:** post-message, get-post-by-author, get-post-count, get-posts
 
-### Frontend
-Next.js + Stacks.js single-page app.
+## Frontend
+- Single-file vanilla JS (index.html)
+- Video background with cross-fade loop
+- Stacks wallet connection
+- On-chain guestbook UI
 
-### Bounty
-[Zero Authority DAO](https://zeroauthoritydao.com/bounty/7cbf50bd-85e0-42c8-a24a-1076b135db62) - $200 USDCx
+## Requirements
+- Node.js v16+
+- Stacks wallet (Xverse, etc.)
+
+## Bounty
+Zero Authority DAO - $200 USDCx prize

@@ -115,8 +115,8 @@ export default function Guestbook() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => connect({
-                onFinish: () => { window.location.reload(); },
-                onCancel: () => {},
+                
+                
               })}
               className="px-6 py-2 rounded-full bg-[#181818] hover:bg-[#232323] text-gray-300 hover:text-white transition-all text-sm font-medium"
             >

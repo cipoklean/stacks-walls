@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stacks Walls — On-Chain Guestbook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --u: min(calc(100vw / 1280), calc(100dvh / 760));
+      
+      --ink: #ffffff;
+      --ink-soft: rgba(255,255,255,0.7);
+      --ink-muted: rgba(255,255,255,0.4);
+      
+      --panel: #181818;
+      --glass-fill: rgba(0,0,0,0.78);
+      --glass-border: rgba(255,255,255,0.08);
+      
+      --accent: #00d4aa;
+      --accent-glow: rgba(0,212,170,0.3);
+      
+      --spacing-xs: calc(0.5 * var(--u));
+      --spacing-sm: calc(1 * var(--u));
+      --spacing-md: calc(1.5 * var(--u));
+      --spacing-lg: calc(2.5 * var(--u));
+      --spacing-xl: calc(4 * var(--u));
+      
+      --radius-sm: calc(0.5 * var(--u));
+      --radius-md: calc(1 * var(--u));
+      --radius-lg: calc(1.5 * var(--u));
+      
+      --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+      --font-mono: 'SF Mono', 'JetBrains Mono', monospace;
+      
+      --transition-fast: 150ms ease;
+      --transition-med: 300ms ease;
+      --transition-slow: 600ms ease;
+    }
+    
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    body {
+      font-family: var(--font-sans);
+      background: var(--panel);
+      color: var(--ink);
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100dvh;
+    }
+    
+    /* Video Background */
+    .video-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      overflow: hidden;
+    }
+    
+    .video-bg video {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1.5s ease;
+    }
+    
+    .video-bg video.active {
+      opacity: 1;
+    }
+    
+    .video-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, 
+        rgba(24,24,24,0.3) 0%,
+        rgba(24,24,24,0.6) 50%,
+        rgba(24,24,24,0.95) 100%
+      );
+      z-index: 1;
+    }
+    
+    /* Layout */
+    .container {
+      max-width: calc(120 * var(--u));
+      margin: 0 auto;
+      padding: 0 var(--spacing-md);
+    }
+    
+    /* Header */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: var(--spacing-md) 0;
+      background: rgba(24,24,24,0.8);
+      backdrop-filter: blur(calc(20 * var(--u)));
+      border-bottom: 1px solid var(--glass-border);
+    }
+    
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .logo {
+      font-size: calc(1.5 * var(--u));
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    
+    .logo span {
+      color: var(--accent);
+    }
+    
+    /* Nav */
+    nav {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+    
+    .nav-links {
+      display: flex;
+      list-style: none;
+      gap: var(--spacing-lg);
+    }
+    
+    .nav-links a {
+      color: var(--ink-soft);
+      text-decoration: none;
+      font-size: calc(0.875 * var(--u));
+      font-weight: 500;
+      transition: color var(--transition-fast);
+    }
+    
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+    
+    .btn-connect {
+      background: var(--accent);
+      color: var(--panel);
+      border: none;
+      padding: calc(0.75 * var(--u)) calc(1.5 * var(--u));
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: calc(0.875 * var(--u));
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+    
+    .btn-connect:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 var(--spacing-sm) calc(2 * var(--u)) var(--accent-glow);
+    }
+    
+    .btn-connect.connected {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+    }
+    
+    /* Burger */
+    .burger {
+      display: none;
+      flex-direction: column;
+      gap: calc(0.375 * var(--u));
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: var(--spacing-xs);
+    }
+    
+    .burger span {
+      display: block;
+      width: calc(1.5 * var(--u));
+      height: calc(0.125 * var(--u));
+      background: var(--ink);
+      transition: all var(--transition-fast);
+    }
+    
+    .burger.active span:nth-child(1) {
+      transform: rotate(45deg) translate(calc(0.375 * var(--u)), calc(0.375 * var(--u)));
+    }
+    
+    .burger.active span:nth-child(2) {
+      opacity: 0;
+    }
+    
+    .burger.active span:nth-child(3) {
+      transform: rotate(-45deg) translate(calc(0.375 * var(--u)), calc(-0.375 * var(--u)));
+    }
+    
+    /* Hero */
+    .hero {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: calc(20 * var(--u)) 0 var(--spacing-xl);
+      position: relative;
+    }
+    
+    .hero-content {
+      max-width: calc(80 * var(--u));
+    }
+    
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      background: var(--glass-fill);
+      border: 1px solid var(--glass-border);
+      padding: var(--spacing-xs) var(--spacing-md);
+      border-radius: calc(100 * var(--u));
+      font-size: calc(0.75 * var(--u));
+      color: var(--ink-soft);
+      margin-bottom: var(--spacing-lg);
+      backdrop-filter: blur(calc(10 * var(--u)))；
+    }
+    
+    .hero-badge::before {
+      content: '';
+      width: calc(0.5 * var(--u));
+      height: calc(0.5 * var(--u));
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    h1 {
+      font-size: clamp(calc(3 * var(--u)), 8vw, calc(6 * var(--u)));
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: var(--spacing-lg);
+    }
+    
+    h1 span {
+      background: linear-gradient(135deg, var(--accent) 0%, #00ffcc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-sub {
+      font-size: calc(1.125 * var(--u));
+      color: var(--ink-soft);
+      max-width: calc(50 * var(--u));
+      margin: 0 auto var(--spacing-xl);
+    }
+    
+    .hero-actions {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .btn-primary {
+      background: var(--accent);
+      color: var(--panel);
+      border: none;
+      padding: calc(1 * var(--u)) calc(2 * var(--u));
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-size: calc(1 * var(--u));
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 var(--spacing-md) calc(3 * var(--u)) var(--accent-glow);
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--glass-border);
+      padding: calc(1 * var(--u)) calc(2 * var(--u));
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-size: calc(1 * var(--u));
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      backdrop-filter: blur(calc(10 * var(--u)));
+    }
+    
+    .btn-secondary:hover {
+      border-color: var(--ink-soft);
+      background: var(--glass-fill);
+    }
+    
+    /* Guestbook Section */
+    .guestbook {
+      padding: var(--spacing-xl) 0;
+      position: relative;
+    }
+    
+    .section-header {
+      text-align: center;
+      margin-bottom: var(--spacing-xl);
+    }
+    
+    .section-header h2 {
+      font-size: clamp(calc(2 * var(--u)), 5vw, calc(3.5 * var(--u)));
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: var(--spacing-sm);
+    }
+    
+    .section-header p {
+      color: var(--ink-soft);
+      font-size: calc(1 * var(--u));
+    }
+    
+    /* Post Form */
+    .post-form {
+      max-width: calc(60 * var(--u));
+      margin: 0 auto var(--spacing-xl);
+      background: var(--glass-fill);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      backdrop-filter: blur(calc(20 * var(--u)));
+    }
+    
+    .form-group {
+      margin-bottom: var(--spacing-md);
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: calc(0.875 * var(--u));
+      font-weight: 500;
+      color: var(--ink-soft);
+      margin-bottom: var(--spacing-xs);
+    }
+    
+    .form-group textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: var(--spacing-md);
+      font-family: var(--font-sans);
+      font-size: calc(1 * var(--u));
+      color: var(--ink);
+      resize: vertical;
+      min-height: calc(8 * var(--u));
+      transition: border-color var(--transition-fast);
+    }
+    
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    
+    .form-group textarea::placeholder {
+      color: var(--ink-muted);
+    }
+    
+    .form-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+    
+    .char-count {
+      font-size: calc(0.75 * var(--u));
+      color: var(--ink-muted);
+    }
+    
+    .char-count.warning {
+      color: #ff6b6b;
+    }
+    
+    /* Posts Grid */
+    .posts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(calc(28 * var(--u)), 1fr));
+      gap: var(--spacing-md);
+      max-width: calc(100 * var(--u));
+      margin: 0 auto;
+    }
+    
+    .post-card {
+      background: var(--glass-fill);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+      backdrop-filter: blur(calc(10 * var(--u)))；
+      transition: all var(--transition-fast);
+    }
+    
+    .post-card:hover {
+      border-color: rgba(255,255,255,0.15);
+      transform: translateY(-2px);
+    }
+    
+    .post-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: var(--spacing-sm);
+      gap: var(--spacing-sm);
+    }
+    
+    .post-author {
+      font-size: calc(0.75 * var(--u));
+      color: var(--accent);
+      font-family: var(--font-mono);
+      word-break: break-all;
+    }
+    
+    .post-time {
+      font-size: calc(0.75 * var(--u));
+      color: var(--ink-muted);
+      white-space: nowrap;
+    }
+    
+    .post-content {
+      font-size: calc(0.875 * var(--u));
+      line-height: 1.7;
+      color: var(--ink-soft);
+    }
+    
+    /* Loading & Empty States */
+    .state-placeholder {
+      text-align: center;
+      padding: var(--spacing-xl);
+      color: var(--ink-muted);
+    }
+    
+    .spinner {
+      width: calc(3 * var(--u));
+      height: calc(3 * var(--u));
+      border: 2px solid var(--glass-border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto var(--spacing-md);
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--glass-border);
+      padding: var(--spacing-lg) 0;
+      text-align: center;
+      color: var(--ink-muted);
+      font-size: calc(0.875 * var(--u));
+    }
+    
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(calc(2 * var(--u)));
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .animate-in {
+      animation: fadeInUp 0.6s ease forwards;
+      opacity: 0;
+    }
+    
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+    
+    /* Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      
+      .video-bg video {
+        transition: none;
+      }
+    }
+    
+    /* Responsive */
+    @media (max-width: 1160px) {
+      .burger {
+        display: flex;
+      }
+      
+      .nav-links {
+        position: fixed;
+        top: calc(70 * var(--u));
+        left: 0;
+        right: 0;
+        background: var(--panel);
+        flex-direction: column;
+        padding: var(--spacing-lg);
+        gap: var(--spacing-md);
+        border-bottom: 1px solid var(--glass-border);
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all var(--transition-med);
+      }
+      
+      .nav-links.open {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+      }
+    }
+    
+    @media (max-width: 640px) {
+      .hero-actions {
+        flex-direction: column;
+      }
+      
+      .posts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Video Background -->
+  <div class="video-bg">
+    <video id="video1" autoplay muted loop playsinline>
+      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260912_104036_bd6924f6-3c8e-417e-8465-6d03c8c2e9e6.mp4" type="video/mp4">
+    </video>
+    <video id="video2" autoplay muted loop playsinline style="display:none;">
+      <source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260912_104036_bd6924f6-3c8e-417e-8465-6d03c8c2e9e6.mp4" type="video/mp4">
+    </video>
+  </div>
+  
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <div class="header-inner">
+        <a href="#" class="logo">stacks<span>walls</span></a>
+        
+        <nav>
+          <ul class="nav-links" id="navLinks">
+            <li><a href="#guestbook">Guestbook</a></li>
+            <li><a href="https://github.com/cipoklean/stacks-walls" target="_blank">GitHub</a></li>
+            <li><a href="https://explorer.hiro.so/txid/1271f7a3f8261bbeb35ca891769556aaf9600c21e9cc994e43e04193e05275be?chain=testnet" target="_blank">Contract</a></li>
+          </ul>
+          
+          <button class="btn-connect" id="connectBtn" onclick="toggleWallet()">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 4C2 2.89543 2.89543 2 4 2H12C13.1046 2 14 2.89543 14 4V12C14 13.1046 13.1046 14 12 14H4C2.89543 14 2 13.1046 2 12V4Z" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6 8H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Connect Wallet
+          </button>
+          
+          <button class="burger" id="burger" onclick="toggleNav()">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge animate-in">Zero Authority DAO Bounty</div>
+        <h1 class="animate-in delay-1">Leave your mark<br>on the <span>blockchain</span></h1>
+        <p class="hero-sub animate-in delay-2">An on-chain guestbook for the Stacks community. Post your message, sign it with your wallet, and watch it become permanent.</p>
+        <div class="hero-actions animate-in delay-3">
+          <a href="#guestbook" class="btn-primary">Start Writing</a>
+          <a href="https://explorer.hiro.so/txid/1271f7a3f8261bbeb35ca891769556aaf9600c21e9cc994e43e04193e05275be?chain=testnet" target="_blank" class="btn-secondary">View Contract</a>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <!-- Guestbook -->
+  <section class="guestbook" id="guestbook">
+    <div class="container">
+      <div class="section-header">
+        <h2>Guestbook</h2>
+        <p>Posts are stored on-chain. No moderation. No removal.</p>
+      </div>
+      
+      <!-- Post Form -->
+      <div class="post-form animate-in">
+        <div class="form-group">
+          <label for="message">Your message</label>
+          <textarea 
+            id="message" 
+            placeholder="Write something memorable..."
+            maxlength="200"
+            oninput="updateCharCount()"
+          ></textarea>
+        </div>
+        
+        <div class="form-footer">
+          <span class="char-count" id="charCount">0 / 200</span>
+          <button class="btn-primary" onclick="postMessage()">
+            Sign & Post
+          </button>
+        </div>
+      </div>
+      
+      <!-- Posts -->
+      <div class="posts-grid" id="postsGrid">
+        <div class="state-placeholder">
+          <div class="spinner"></div>
+          <p>Loading posts...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>Built for Zero Authority DAO · <a href="https://zeroauthoritydao.com" target="_blank">Zero Authority DAO</a></p>
+      <p style="margin-top: calc(0.5 * var(--u)); font-size: calc(0.75 * var(--u));">Contract: ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4.guestbook</p>
+    </div>
+  </footer>
+  
+  <script>
+    // Constants
+    const CONTRACT_ADDRESS = 'ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4.guestbook';
+    const NETWORK = 'testnet';
+    
+    // State
+    let currentWallet = null;
+    let posts = [];
+    
+    // Video Cross-Fade
+    function initVideoLoop() {
+      const v1 = document.getElementById('video1');
+      const v2 = document.getElementById('video2');
+      
+      if (!v1 || !v2) return;
+      
+      let isV1Active = true;
+      
+      function switchVideo() {
+        if (isV1Active) {
+          v2.style.display = 'block';
+          v2.play();
+          v2.classList.add('active');
+          v1.classList.remove('active');
+        } else {
+          v1.style.display = 'block';
+          v1.play();
+          v1.classList.add('active');
+          v2.classList.remove('active');
+        }
+        isV1Active = !isV1Active;
+      }
+      
+      v1.addEventListener('ended', switchVideo);
+      v2.addEventListener('ended', switchVideo);
+      
+      v1.classList.add('active');
+    }
+    
+    // Burger Menu
+    function toggleNav() {
+      const nav = document.getElementById('navLinks');
+      const burger = document.getElementById('burger');
+      nav.classList.toggle('open');
+      burger.classList.toggle('active');
+    }
+    
+    // Char Count
+    function updateCharCount() {
+      const textarea = document.getElementById('message');
+      const counter = document.getElementById('charCount');
+      const len = textarea.value.length;
+      counter.textContent = `${len} / 200`;
+      counter.classList.toggle('warning', len > 180);
+    }
+    
+    // Wallet Connection
+    async function toggleWallet() {
+      const btn = document.getElementById('connectBtn');
+      
+      if (currentWallet) {
+        currentWallet = null;
+        btn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 4C2 2.89543 2.89543 2 4 2H12C13.1046 2 14 2.89543 14 4V12C14 13.1046 13.1046 14 12 14H4C2.89543 14 2 13.1046 2 12V4Z" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M6 8H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Connect Wallet`;
+        btn.classList.remove('connected');
+        return;
+      }
+      
+      try {
+        // Try Stacks Wallet
+        if (window.stacksWallet) {
+          const response = await window.stacksWallet.connect({
+            scopes: ['profile', 'get_public_key']
+          });
+          currentWallet = response;
+          updateConnectBtn();
+        } else {
+          alert('Please install a Stacks wallet like Xverse or Backpack.');
+        }
+      } catch (err) {
+        console.error('Wallet connection failed:', err);
+      }
+    }
+    
+    function updateConnectBtn() {
+      const btn = document.getElementById('connectBtn');
+      if (currentWallet && currentWallet.profile?.stxAddress?.testnet) {
+        const addr = currentWallet.profile.stxAddress.testnet;
+        btn.innerHTML = `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+        btn.classList.add('connected');
+      }
+    }
+    
+    // Post Message
+    async function postMessage() {
+      const textarea = document.getElementById('message');
+      const message = textarea.value.trim();
+      
+      if (!message) {
+        alert('Please enter a message');
+        return;
+      }
+      
+      if (!currentWallet) {
+        alert('Please connect your wallet first');
+        return;
+      }
+      
+      try {
+        // Disable button
+        const btn = document.querySelector('.post-form .btn-primary');
+        const originalText = btn.textContent;
+        btn.textContent = 'Signing...';
+        btn.disabled = true;
+        
+        // Get private key from wallet (Xverse/Backpack pattern)
+        const pkResponse = await window.stacksWallet.request('eth_requestAccount');
+        
+        // For demo, use a test private key (in production, get from wallet securely)
+        const privateKey = '0d9e111df0770e0e11a5e72408456ec570f9e5dd2d9dd3ed8d017a84c1be5cbf01';
+        
+        // Build transaction
+        const { makeContractPost, cvToHex, ClarityValue } = await import('https://cdn.skypack.dev/@stacks/transactions');
+        
+        const tx = await makeContractPost({
+          contractAddress: CONTRACT_ADDRESS.split('.')[0],
+          contractName: CONTRACT_ADDRESS.split('.')[1],
+          functionName: 'post-message',
+          functionArgs: [ClarityValue.utf8String(message)],
+          senderKey: privateKey,
+          network: NETWORK
+        });
+        
+        const txId = await tx.signAndSendTx();
+        
+        // Success
+        alert(`Posted! TXID: ${txId}`);
+        textarea.value = '';
+        updateCharCount();
+        
+        // Reload posts
+        loadPosts();
+        
+      } catch (err) {
+        console.error('Post failed:', err);
+        alert('Failed to post: ' + err.message);
+      } finally {
+        const btn = document.querySelector('.post-form .btn-primary');
+        btn.textContent = 'Sign & Post';
+        btn.disabled = false;
+      }
+    }
+    
+    // Load Posts
+    async function loadPosts() {
+      const grid = document.getElementById('postsGrid');
+      grid.innerHTML = '<div class="state-placeholder"><div class="spinner"></div><p>Loading posts...</p></div>';
+      
+      try {
+        // Fetch post count
+        const countResponse = await fetch(
+          `https://api.testnet.hiro.so/v2/contracts/call-read/${CONTRACT_ADDRESS}?function-name=get-post-count`
+        );
+        const countData = await countResponse.json();
+        const count = parseInt(countData.result, 16);
+        
+        if (count === 0) {
+          grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
+          return;
+        }
+        
+        // Fetch posts (up to last 20)
+        const limit = Math.min(count, 20);
+        const start = count - limit;
+        
+        const postsResponse = await fetch(
+          `https://api.testnet.hiro.so/v2/contracts/call-read/${CONTRACT_ADDRESS}?function-name=get-posts&arg0=${start}&arg1=${limit}`
+        );
+        const postsData = await postsResponse.json();
+        
+        // Parse posts
+        const results = postsData.result;
+        posts = results.map(item => {
+          const author = item.author;
+          const content = item.content;
+          const timestamp = parseInt(item.timestamp, 10) / 1000;
+          return { author, content, timestamp };
+        });
+        
+        // Render
+        renderPosts();
+        
+      } catch (err) {
+        console.error('Load failed:', err);
+        grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p></div>';
+      }
+    }
+    
+    function renderPosts() {
+      const grid = document.getElementById('postsGrid');
+      
+      if (posts.length === 0) {
+        grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
+        return;
+      }
+      
+      grid.innerHTML = posts.map(post => `
+        <div class="post-card">
+          <div class="post-header">
+            <span class="post-author">${post.author.slice(0, 12)}...${post.author.slice(-8)}</span>
+            <span class="post-time">${formatTime(post.timestamp)}</span>
+          </div>
+          <div class="post-content">${escapeHtml(post.content)}</div>
+        </div>
+      `).join('');
+    }
+    
+    function formatTime(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = (now - date) / 1000;
+      
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+      
+      return date.toLocaleDateString();
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // Entrance Animations
+    function initAnimations() {
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      
+      if (prefersReducedMotion) return;
+      
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.animationPlayState = 'running';
+          }
+        });
+      }, { threshold: 0.1 });
+      
+      document.querySelectorAll('.animate-in').forEach(el => {
+        el.style.animationPlayState = 'paused';
+        observer.observe(el);
+      });
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      initVideoLoop();
+      initAnimations();
+      loadPosts();
+    });
+    
+    // Close mobile nav on link click
+    document.querySelectorAll('.nav-links a').forEach(link => {
+      link.addEventListener('click', () => {
+        document.getElementById('navLinks').classList.remove('open');
+        document.getElementById('burger').classList.remove('active');
+      });
+    });
+  </script>
+</body>
+</html>

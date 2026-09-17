@@ -838,48 +838,97 @@
         const contractAddr = CONTRACT_ADDRESS.split('.')[0];
         const contractName = CONTRACT_ADDRESS.split('.')[1];
         
-        // Fetch post count - use stx_callContract via direct API
-        // Format: POST body = ["ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4"]
+        // Use stx_callContract via wallet connection for read operations
+        // This is the standard way to call contract read functions
+        if (window.stacksWallet && window.stacksWallet.isWalletConnected) {
+          // Use wallet's stx_callContract
+          const result = await window.stacksWallet.request('stx_callContract', {
+            contract_address: contractAddr,
+            contract_name: contractName,
+            function_name: 'get-post-count',
+            function_args: []
+          });
+          let count = 0;
+          if (result && result.result) {
+            count = parseInt(result.result, 16);
+          } else if (typeof result === 'string') {
+            count = parseInt(result, 16);
+          }
+          console.log('Post count via wallet:', count);
+          
+          if (count === 0) {
+            grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
+            return;
+          }
+          
+          // Fetch posts
+          const limit = Math.min(count, 20);
+          const start = count - limit;
+          
+          const postsResult = await window.stacksWallet.request('stx_callContract', {
+            contract_address: contractAddr,
+            contract_name: contractName,
+            function_name: 'get-posts',
+            function_args: [
+              { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
+              { type: 'list', value: [String(limit) + 'u'] }
+            ]
+          });
+          
+          posts = [];
+          if (postsResult && postsResult.result && postsResult.result.list) {
+            posts = postsResult.result.list.map(item => {
+              const t = item.tuple || item;
+              return {
+                author: t.author || 'unknown',
+                content: t.content || '',
+                timestamp: parseInt(t.timestamp, 10) * 1000 || Date.now()
+              };
+            });
+          }
+          console.log('Parsed posts via wallet:', posts.length);
+          renderPosts();
+          return;
+        }
+        
+        // Fallback: Use direct API call
         const countUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + 
           encodeURIComponent(contractAddr) + '/' + 
           encodeURIComponent(contractName) + '/get-post-count';
         
+        console.log('Fallback: Calling API:', countUrl);
+        
         const countResp = await fetch(countUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([CONTRACT_ADDRESS])  // Pass full contract address as array
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: '[]'  // Empty args for no-arg function
         });
         
+        console.log('Count status:', countResp.status);
+        const countText = await countResp.text();
+        console.log('Count response text:', countText.slice(0, 300));
+        
         if (!countResp.ok) {
-          console.error('Count response not ok:', countResp.status);
-          const text = await countResp.text();
-          console.error('Response text:', text.slice(0, 200));
-          throw new Error('API returned ' + countResp.status + ': ' + text.slice(0, 100));
+          throw new Error('API returned ' + countResp.status + ': ' + countText.slice(0, 100));
         }
         
-        const countJson = await countResp.json();
-        console.log('Count response:', countJson);
+        const countJson = JSON.parse(countText);
+        console.log('Count JSON:', JSON.stringify(countJson).slice(0, 300));
         
-        // Parse result - tries multiple formats
         let count = 0;
-        if (countJson.result !== undefined && countJson.result !== null) {
-          const r = countJson.result;
-          if (typeof r === 'string') count = parseInt(r, 16);
-          else if (typeof r === 'number') count = r;
-          else if (r.result !== undefined) count = parseInt(r.result, 16);
-          else count = parseInt(JSON.stringify(r), 16);
-        } else if (countJson.data !== undefined) {
-          count = parseInt(countJson.data, 16);
+        if (countJson.result !== undefined) {
+          count = typeof countJson.result === 'string' ? parseInt(countJson.result, 16) : countJson.result;
         }
-        
-        console.log('Post count:', count);
         
         if (count === 0 || isNaN(count)) {
           grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
           return;
         }
         
-        // Fetch posts (up to last 20)
+        // Fetch posts
         const limit = Math.min(count, 20);
         const start = count - limit;
         
@@ -887,29 +936,23 @@
           encodeURIComponent(contractAddr) + '/' + 
           encodeURIComponent(contractName) + '/get-posts';
         
-        // Build args for get-posts(start, len)
-        const postsBody = JSON.stringify([CONTRACT_ADDRESS, 
+        const postsBody = JSON.stringify([
           { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
           { type: 'list', value: [String(limit) + 'u'] }
         ]);
         
-        console.log('Posts API body:', postsBody);
-        
         const postsResp = await fetch(postsUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: postsBody
         });
         
         if (!postsResp.ok) {
-          console.error('Posts response not ok:', postsResp.status);
-          const text = await postsResp.text();
-          console.error('Response text:', text.slice(0, 200));
           throw new Error('Posts API returned ' + postsResp.status);
         }
         
         const postsJson = await postsResp.json();
-        console.log('Posts response:', JSON.stringify(postsJson).slice(0, 500));
+        console.log('Posts JSON:', JSON.stringify(postsJson).slice(0, 300));
         
         posts = [];
         if (postsJson.result && postsJson.result.list) {
@@ -921,12 +964,6 @@
               timestamp: parseInt(t.timestamp, 10) * 1000 || Date.now()
             };
           });
-        } else if (postsJson.result && Array.isArray(postsJson.result)) {
-          posts = postsJson.result.map(item => ({
-            author: item.author,
-            content: item.content,
-            timestamp: parseInt(item.timestamp, 10) * 1000 || Date.now()
-          }));
         }
         
         console.log('Parsed posts:', posts.length);
@@ -934,7 +971,7 @@
         
       } catch (err) {
         console.error('Load failed:', err);
-        grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p><p>' + err.message + '</p></div>';
+        grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p><p style="font-size:0.8em;color:rgba(255,255,255,0.5)">' + err.message + '</p></div>';
       }
     }
     

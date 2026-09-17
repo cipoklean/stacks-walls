@@ -1,0 +1,16 @@
+[project]
+name = "stacks-walls"
+description = "On-chain guestbook for Stacks bounty"
+authors = []
+telemetry = false
+cache_dir = "./.cache"
+requirements = []
+
+[repl.analysis]
+passes = ["check_checker"]
+check_checker = { trusted_sender = false, trusted_caller = false, callee_filter = false }
+
+[contracts.guestbook]
+path = "contracts/guestbook.clar"
+clarity_version = 6
+epoch = "4.0"

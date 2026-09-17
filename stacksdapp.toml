@@ -1,0 +1,6 @@
+# stacksdapp project marker
+[project]
+name = "stacks-walls"
+
+[defaults]
+network = "testnet"

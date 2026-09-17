@@ -836,11 +836,10 @@
       
       try {
         // Fetch post count
-        const countResponse = await fetch(
-          `https://api.testnet.hiro.so/v2/contracts/call-read/${CONTRACT_ADDRESS}?function-name=get-post-count`
-        );
-        const countData = await countResponse.json();
-        const count = parseInt(countData.result, 16);
+        const countUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + CONTRACT_ADDRESS + '/get-post-count';
+        const countResp = await fetch(countUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '[]' });
+        const countJson = await countResp.json();
+        const count = parseInt(countJson.result, 16);
         
         if (count === 0) {
           grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
@@ -851,19 +850,28 @@
         const limit = Math.min(count, 20);
         const start = count - limit;
         
-        const postsResponse = await fetch(
-          `https://api.testnet.hiro.so/v2/contracts/call-read/${CONTRACT_ADDRESS}?function-name=get-posts&arg0=${start}&arg1=${limit}`
-        );
-        const postsData = await postsResponse.json();
+        // Build args for get-posts(start, len) - Clarity tuple/list
+        const args = JSON.stringify([
+          { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
+          { type: 'list', value: [String(limit) + 'u'] }
+        ]);
         
-        // Parse posts
-        const results = postsData.result;
-        posts = results.map(item => {
-          const author = item.author;
-          const content = item.content;
-          const timestamp = parseInt(item.timestamp, 10) / 1000;
-          return { author, content, timestamp };
-        });
+        const postsUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + CONTRACT_ADDRESS + '/get-posts';
+        const postsResp = await fetch(postsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args }) });
+        const postsJson = await postsResp.json();
+        
+        // Parse posts from Clarity list
+        posts = [];
+        if (postsJson.result && postsJson.result.list) {
+          posts = postsJson.result.list.map(item => {
+            const t = item.tuple || item;
+            return {
+              author: t.author,
+              content: t.content,
+              timestamp: parseInt(t.timestamp, 10)
+            };
+          });
+        }
         
         // Render
         renderPosts();

@@ -2,7 +2,7 @@
 // Re-run `stacksdapp generate` to update.
 
 import { request } from '@stacks/connect';
-import { callReadOnlyFunction, cvToValue, ClarityValue } from '@stacks/transactions';
+import { fetchCallReadOnlyFunction, cvToValue, ClarityValue } from '@stacks/transactions';
 import { getReadOnlyNetwork, scaffoldConfig } from '../scaffold.config';
 import { callDevnetContract, getDevnetSenderAddress } from '../lib/devnet';
 
@@ -59,7 +59,7 @@ export async function guestbook_getPostByAuthor(
 ): Promise<unknown> {
   const { address, contractName } = getContractId('guestbook');
   if (!address) return null;
-  const result = await callReadOnlyFunction({
+  const result = await fetchCallReadOnlyFunction({
     contractAddress: address,
     contractName,
     functionName: 'get-post-by-author',
@@ -79,7 +79,7 @@ export async function guestbook_getPostCount(
 ): Promise<unknown> {
   const { address, contractName } = getContractId('guestbook');
   if (!address) return null;
-  const result = await callReadOnlyFunction({
+  const result = await fetchCallReadOnlyFunction({
     contractAddress: address,
     contractName,
     functionName: 'get-post-count',

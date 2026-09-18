@@ -32,7 +32,30 @@
 
 (define-read-only (get-post-by-author (author principal))
   (unwrap! (map-get? posts author) {
-    content: "",
+    content: (string-ascii 200 0),
     index: u0
   })
+)
+
+(define-read-only (get-posts (start uint) (len uint))
+  (let ((count (var-get post-count)))
+    (if (> count u0)
+      (let ((authors (map-keys posts))
+            (total (len authors))
+            (actual-start (if (> start total) total start))
+            (actual-len (if (> (+ actual-start len) total) (- total actual-start) len))
+            (sublist (slice authors actual-start actual-len))
+            (result (list)))
+        (fold result
+          (lambda (author acc)
+            (let ((post-data (unwrap! (map-get? posts author) (list))))
+              (list append (merge post-data { author: author }) acc))
+          )
+          result
+        )
+        (ok result)
+      )
+      (ok (list))
+    )
+  )
 )

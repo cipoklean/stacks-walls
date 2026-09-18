@@ -41,8 +41,8 @@ plan:
   - id: 0
     transactions:
     - transaction-type: emulated-contract-publish
-      contract-name: guestbook
+      contract-name: guestbook-v2
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/guestbook.clar
+      path: contracts/guestbook-v2.clar
       clarity-version: 6
     epoch: '4.0'

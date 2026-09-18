@@ -1,4 +1,8 @@
+[network]
+name = "testnet"
+stacks_node_rpc_address = "https://api.testnet.hiro.so"
+deployment_fee_rate = 10
+
 [accounts.deployer]
-private-key = "0d9e111df0770e0e11a5e72408456ec570f9e5dd2d9dd3ed8d017a84c1be5cbf01"
+mnemonic = "wash zone great replace kingdom letter anger response actual visit focus letter"
 stx-address = "ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4"
-network = "testnet"

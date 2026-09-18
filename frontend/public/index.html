@@ -830,140 +830,84 @@
     }
     
     // Load Posts
-    async function loadPosts() {
+async function loadPosts() {
       const grid = document.getElementById('postsGrid');
       grid.innerHTML = '<div class="state-placeholder"><div class="spinner"></div><p>Loading posts...</p></div>';
       
       try {
-        const contractAddr = CONTRACT_ADDRESS.split('.')[0];
-        const contractName = CONTRACT_ADDRESS.split('.')[1];
+        // The new contract deployed as guestbook-v2
+        const CONTRACT = 'ST12JJRGZECY58KTESA0KFPZR68GQRK6T0CDNK3Z4.guestbook-v2';
+        const contractAddr = CONTRACT.split('.')[0];
+        const contractName = CONTRACT.split('.')[1];
         
-        // Use stx_callContract via wallet connection for read operations
-        // This is the standard way to call contract read functions
-        if (window.stacksWallet && window.stacksWallet.isWalletConnected) {
-          // Use wallet's stx_callContract
-          const result = await window.stacksWallet.request('stx_callContract', {
-            contract_address: contractAddr,
-            contract_name: contractName,
-            function_name: 'get-post-count',
-            function_args: []
-          });
-          let count = 0;
-          if (result && result.result) {
-            count = parseInt(result.result, 16);
-          } else if (typeof result === 'string') {
-            count = parseInt(result, 16);
-          }
-          console.log('Post count via wallet:', count);
-          
-          if (count === 0) {
-            grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
-            return;
-          }
-          
-          // Fetch posts
-          const limit = Math.min(count, 20);
-          const start = count - limit;
-          
-          const postsResult = await window.stacksWallet.request('stx_callContract', {
-            contract_address: contractAddr,
-            contract_name: contractName,
-            function_name: 'get-posts',
-            function_args: [
-              { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
-              { type: 'list', value: [String(limit) + 'u'] }
-            ]
-          });
-          
-          posts = [];
-          if (postsResult && postsResult.result && postsResult.result.list) {
-            posts = postsResult.result.list.map(item => {
-              const t = item.tuple || item;
-              return {
-                author: t.author || 'unknown',
-                content: t.content || '',
-                timestamp: parseInt(t.timestamp, 10) * 1000 || Date.now()
-              };
-            });
-          }
-          console.log('Parsed posts via wallet:', posts.length);
-          renderPosts();
-          return;
-        }
+        // Import ClarityValue utilities from CDN
+        const tx = await import('https://cdn.skypack.dev/@stacks/transactions');
+        const clarity = await import('https://cdn.skypack.dev/@stacks/transactions/dist/clarity.js');
         
-        // Fallback: Use direct API call
-        const countUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + 
-          encodeURIComponent(contractAddr) + '/' + 
-          encodeURIComponent(contractName) + '/get-post-count';
-        
-        console.log('Fallback: Calling API:', countUrl);
-        
-        const countResp = await fetch(countUrl, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: '[]'  // Empty args for no-arg function
+        // Call get-post-count
+        console.log('Calling get-post-count on guestbook-v2...');
+        const countResult = await tx.callReadOnlyFunction({
+          contractAddress: contractAddr,
+          contractName: contractName,
+          functionName: 'get-post-count',
+          functionArgs: [],
+          network: 'testnet',
+          senderAddress: contractAddr
         });
+        console.log('Count result:', countResult);
         
-        console.log('Count status:', countResp.status);
-        const countText = await countResp.text();
-        console.log('Count response text:', countText.slice(0, 300));
-        
-        if (!countResp.ok) {
-          throw new Error('API returned ' + countResp.status + ': ' + countText.slice(0, 100));
-        }
-        
-        const countJson = JSON.parse(countText);
-        console.log('Count JSON:', JSON.stringify(countJson).slice(0, 300));
-        
+        // Parse the result: { type: 7, value: { type: 1, value: 0n } } = (uint response 0)
         let count = 0;
-        if (countJson.result !== undefined) {
-          count = typeof countJson.result === 'string' ? parseInt(countJson.result, 16) : countJson.result;
+        if (countResult && countResult.type === 9) { // ResponseOk
+          const inner = countResult.value;
+          if (inner && inner.type === 1) { // UInt
+            count = Number(inner.value);
+          }
         }
+        console.log('Post count:', count);
         
-        if (count === 0 || isNaN(count)) {
+        if (count === 0) {
           grid.innerHTML = '<div class="state-placeholder"><p>No posts yet. Be the first!</p></div>';
           return;
         }
         
-        // Fetch posts
+        // Fetch posts (up to last 20)
         const limit = Math.min(count, 20);
         const start = count - limit;
         
-        const postsUrl = 'https://api.testnet.hiro.so/v2/contracts/call-read/' + 
-          encodeURIComponent(contractAddr) + '/' + 
-          encodeURIComponent(contractName) + '/get-posts';
+        // Build ClarityValue args: get-posts(start: uint, len: uint)
+        const startArg = clarity.uintCV(start);
+        const lenArg = clarity.listCV([clarity.uintCV(limit)]);
+        const args = [startArg, lenArg];
         
-        const postsBody = JSON.stringify([
-          { type: 'tuple', value: { 'start-index': String(start) + 'u' } },
-          { type: 'list', value: [String(limit) + 'u'] }
-        ]);
+        console.log('Calling get-posts with args:', args.map(a => tx.cvToHex(a)));
         
-        const postsResp = await fetch(postsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: postsBody
+        const postsResult = await tx.callReadOnlyFunction({
+          contractAddress: contractAddr,
+          contractName: contractName,
+          functionName: 'get-posts',
+          functionArgs: args,
+          network: 'testnet',
+          senderAddress: contractAddr
         });
+        console.log('Posts result:', postsResult);
         
-        if (!postsResp.ok) {
-          throw new Error('Posts API returned ' + postsResp.status);
-        }
-        
-        const postsJson = await postsResp.json();
-        console.log('Posts JSON:', JSON.stringify(postsJson).slice(0, 300));
-        
+        // Parse posts from Clarity list response
         posts = [];
-        if (postsJson.result && postsJson.result.list) {
-          posts = postsJson.result.list.map(item => {
-            const t = item.tuple || item;
-            return {
-              author: t.author || 'unknown',
-              content: t.content || '',
-              timestamp: parseInt(t.timestamp, 10) * 1000 || Date.now()
-            };
-          });
+        if (postsResult && postsResult.type === 9 && postsResult.value) {
+          const listVal = postsResult.value;
+          if (listVal.type === 6) { // List type
+            const items = listVal.value || [];
+            console.log('List items count:', items.length);
+            posts = items.map(item => {
+              const t = item.tuple || item;
+              return {
+                author: t.author ? (typeof t.author === 'string' ? t.author : clarity.principalToString(t.author)) : 'unknown',
+                content: t.content ? (typeof t.content === 'string' ? t.content : '') : '',
+                index: t.index ? Number(t.index.value || t.index) : 0
+              };
+            });
+          }
         }
         
         console.log('Parsed posts:', posts.length);
@@ -974,6 +918,7 @@
         grid.innerHTML = '<div class="state-placeholder"><p>Failed to load posts</p><p style="font-size:0.8em;color:rgba(255,255,255,0.5)">' + err.message + '</p></div>';
       }
     }
+
     
     function renderPosts() {
       const grid = document.getElementById('postsGrid');
